@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { analyzeScheduleCompliance } from '../services/geminiService';
 import { Employee, Shift } from '../types';
 import { ShieldCheck, AlertTriangle, RefreshCw } from 'lucide-react';
-import ReactMarkdown from 'react-markdown'; // Assuming standard markdown rendering or simple text
 
 interface CompliancePanelProps {
   employees: Employee[];

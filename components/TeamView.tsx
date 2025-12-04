@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Employee, AvailabilityRequest } from '../types';
 import { DAYS_OF_WEEK } from '../constants';
-import { Mail, Check, X, Calendar, Edit2, User, Clock, Trash2, AlertTriangle } from 'lucide-react';
+import { Mail, Check, X, Edit2, User, Clock, Trash2, AlertTriangle } from 'lucide-react';
 
 interface TeamViewProps {
   employees: Employee[];
