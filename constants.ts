@@ -40,4 +40,4 @@ export const INITIAL_REQUESTS: AvailabilityRequest[] = [
   }
 ];
 
-export const WEEKLY_BUDGET = 3500;
+export const INITIAL_WEEKLY_BUDGET = 3500;

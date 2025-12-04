@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Employee, Shift } from '../types';
 import { DAYS_OF_WEEK } from '../constants';
-import { Plus, X, Clock, Sparkles, AlertTriangle } from 'lucide-react';
+import { Plus, X, Clock, Sparkles, AlertTriangle, Save, Download, Trash2, FileDown } from 'lucide-react';
 import { generateSmartScheduleSuggestion } from '../services/geminiService';
 
 interface ScheduleGridProps {
@@ -9,9 +9,22 @@ interface ScheduleGridProps {
   employees: Employee[];
   onAddShift: (shift: Shift) => void;
   onRemoveShift: (shiftId: string) => void;
+  onSaveTemplate?: () => void;
+  onLoadTemplate?: () => void;
+  onClearSchedule?: () => void;
+  onExportSchedule?: () => void;
 }
 
-export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, employees, onAddShift, onRemoveShift }) => {
+export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ 
+  shifts, 
+  employees, 
+  onAddShift, 
+  onRemoveShift,
+  onSaveTemplate,
+  onLoadTemplate,
+  onClearSchedule,
+  onExportSchedule
+}) => {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ day: number, hour: number } | null>(null);
   const [isAiLoading, setIsAiLoading] = useState<number | null>(null);
@@ -59,8 +72,53 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, employees, o
     }
   };
 
+  // Helper to calculate total hours for an employee
+  const getEmployeeWeeklyHours = (empId: string) => {
+    return shifts
+      .filter(s => s.employeeId === empId)
+      .reduce((acc, s) => acc + (parseInt(s.endTime) - parseInt(s.startTime)), 0);
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      {/* Toolbar */}
+      <div className="p-4 border-b border-slate-200 flex flex-wrap justify-between items-center bg-slate-50 gap-4">
+        <div className="text-sm text-slate-500 font-medium">
+          Manage Schedule
+        </div>
+        <div className="flex gap-2">
+           <button 
+             onClick={onLoadTemplate}
+             className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-white hover:shadow-sm rounded-md border border-slate-200 transition-all"
+             title="Load Saved Template"
+           >
+             <Download size={14} /> Load Template
+           </button>
+           <button 
+             onClick={onSaveTemplate}
+             className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-white hover:shadow-sm rounded-md border border-slate-200 transition-all"
+             title="Save Current as Template"
+           >
+             <Save size={14} /> Save Template
+           </button>
+           <div className="w-px h-6 bg-slate-300 mx-1"></div>
+           <button 
+             onClick={onClearSchedule}
+             className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-md border border-transparent transition-all"
+             title="Clear All Shifts"
+           >
+             <Trash2 size={14} /> Clear
+           </button>
+           <button 
+             onClick={onExportSchedule}
+             className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-md border border-indigo-100 transition-all ml-2"
+             title="Export CSV"
+           >
+             <FileDown size={14} /> Export CSV
+           </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-7 divide-y md:divide-y-0 md:divide-x divide-slate-200">
         {DAYS_OF_WEEK.map((day, index) => {
           const dayShifts = getShiftsForDay(index);
@@ -134,6 +192,9 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, employees, o
                 {employees.map(emp => {
                   const isUnavailable = emp.unavailableDays?.includes(selectedSlot.day);
                   const shiftsToday = shifts.filter(s => s.employeeId === emp.id && s.dayIndex === selectedSlot.day).length;
+                  const weeklyHours = getEmployeeWeeklyHours(emp.id);
+                  const isOvertime = weeklyHours >= 40;
+                  const isApproachingOvertime = weeklyHours >= 32 && weeklyHours < 40;
                   
                   return (
                     <button 
@@ -156,22 +217,46 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, employees, o
                             <X size={10} />
                           </div>
                         )}
+                        {!isUnavailable && isOvertime && (
+                          <div className="absolute -bottom-1 -right-1 bg-red-600 text-white rounded-full p-0.5 border-2 border-white" title="Overtime Alert">
+                            <AlertTriangle size={10} />
+                          </div>
+                        )}
                       </div>
                       <div className="flex-1">
                         <div className="flex justify-between items-center">
                           <div className={`font-medium ${isUnavailable ? 'text-slate-500' : 'text-slate-800 group-hover:text-indigo-700'}`}>
                             {emp.name}
                           </div>
-                          {isUnavailable && (
-                            <span className="text-[10px] font-bold text-red-500 flex items-center gap-1 bg-red-100 px-1.5 py-0.5 rounded">
-                              UNAVAILABLE
-                            </span>
-                          )}
-                          {!isUnavailable && shiftsToday > 0 && (
-                             <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1 bg-amber-100 px-1.5 py-0.5 rounded">
-                               ALREADY SCHEDULED
-                             </span>
-                          )}
+                          
+                          {/* Status Badges */}
+                          <div className="flex gap-1">
+                            {!isUnavailable && !isOvertime && !isApproachingOvertime && (
+                                <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                  {weeklyHours} hrs
+                                </span>
+                            )}
+                            {!isUnavailable && isApproachingOvertime && (
+                                <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">
+                                  {weeklyHours} hrs
+                                </span>
+                            )}
+                            {!isUnavailable && isOvertime && (
+                                <span className="text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                  <AlertTriangle size={8} /> {weeklyHours} hrs
+                                </span>
+                            )}
+                            {isUnavailable && (
+                                <span className="text-[10px] font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded">
+                                UNAVAILABLE
+                                </span>
+                            )}
+                            {!isUnavailable && shiftsToday > 0 && (
+                                <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">
+                                ALREADY SCHEDULED
+                                </span>
+                            )}
+                          </div>
                         </div>
                         <div className="text-xs text-slate-500">{emp.role} • ${emp.hourlyRate}/hr</div>
                       </div>

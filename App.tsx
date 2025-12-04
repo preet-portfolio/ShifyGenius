@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   CalendarDays, 
@@ -8,12 +8,14 @@ import {
   Bell, 
   DollarSign, 
   Clock, 
-  AlertCircle 
+  AlertCircle,
+  Edit2,
+  Check
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 import { Employee, Shift, AppView, WeeklyStats, AvailabilityRequest } from './types';
-import { INITIAL_EMPLOYEES, INITIAL_SHIFTS, WEEKLY_BUDGET, INITIAL_REQUESTS } from './constants';
+import { INITIAL_EMPLOYEES, INITIAL_SHIFTS, INITIAL_WEEKLY_BUDGET, INITIAL_REQUESTS } from './constants';
 import { StatsCard } from './components/StatsCard';
 import { ScheduleGrid } from './components/ScheduleGrid';
 import { CompliancePanel } from './components/CompliancePanel';
@@ -24,6 +26,8 @@ const App: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
   const [shifts, setShifts] = useState<Shift[]>(INITIAL_SHIFTS);
   const [requests, setRequests] = useState<AvailabilityRequest[]>(INITIAL_REQUESTS);
+  const [budget, setBudget] = useState<number>(INITIAL_WEEKLY_BUDGET);
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Derived State: Calculate Stats
@@ -52,9 +56,9 @@ const App: React.FC = () => {
       totalCost,
       totalHours,
       overtimeHours,
-      budget: WEEKLY_BUDGET
+      budget: budget
     };
-  }, [shifts, employees]);
+  }, [shifts, employees, budget]);
 
   // Derived State: Chart Data
   const chartData = useMemo(() => {
@@ -87,24 +91,17 @@ const App: React.FC = () => {
   };
 
   const handleRemoveEmployee = (employeeId: string) => {
-    // Remove employee
     setEmployees(employees.filter(e => e.id !== employeeId));
-    // Remove their shifts
     setShifts(shifts.filter(s => s.employeeId !== employeeId));
-    // Remove their requests
     setRequests(requests.filter(r => r.employeeId !== employeeId));
   };
 
   const handleApproveRequest = (request: AvailabilityRequest) => {
-    // 1. Mark request as approved
     setRequests(requests.map(r => r.id === request.id ? { ...r, status: 'APPROVED' } : r));
     
-    // 2. Apply changes if it's an availability change
     if (request.type === 'AVAILABILITY_CHANGE' && request.requestedUnavailableDays) {
       setEmployees(employees.map(emp => {
         if (emp.id === request.employeeId) {
-          // Merge current unavailable days with requested ones for demo logic
-          // Real logic might need to fully replace or merge uniquely
           const uniqueDays = Array.from(new Set([...(emp.unavailableDays || []), ...request.requestedUnavailableDays]));
           return { ...emp, unavailableDays: uniqueDays.sort() };
         }
@@ -115,6 +112,67 @@ const App: React.FC = () => {
 
   const handleRejectRequest = (requestId: string) => {
     setRequests(requests.map(r => r.id === requestId ? { ...r, status: 'REJECTED' } : r));
+  };
+
+  // Schedule Actions
+  const handleSaveTemplate = () => {
+    try {
+      localStorage.setItem('shift_template', JSON.stringify(shifts));
+      alert('Schedule template saved successfully!');
+    } catch (e) {
+      console.error('Failed to save template', e);
+    }
+  };
+
+  const handleLoadTemplate = () => {
+    try {
+      const saved = localStorage.getItem('shift_template');
+      if (saved) {
+        if (window.confirm('This will overwrite the current schedule. Continue?')) {
+          setShifts(JSON.parse(saved));
+        }
+      } else {
+        alert('No saved template found.');
+      }
+    } catch (e) {
+      console.error('Failed to load template', e);
+    }
+  };
+
+  const handleClearSchedule = () => {
+    if (window.confirm('Are you sure you want to clear all shifts?')) {
+      setShifts([]);
+    }
+  };
+
+  const handleExportSchedule = () => {
+    const headers = ['Day', 'Employee', 'Role', 'Start Time', 'End Time', 'Hours', 'Cost'];
+    const rows = shifts.map(s => {
+      const emp = employees.find(e => e.id === s.employeeId);
+      const duration = parseInt(s.endTime) - parseInt(s.startTime);
+      const cost = duration * (emp?.hourlyRate || 0);
+      return [
+        ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][s.dayIndex],
+        emp?.name || 'Unknown',
+        s.role,
+        `${s.startTime}:00`,
+        `${s.endTime}:00`,
+        duration,
+        cost
+      ];
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + headers.join(",") + "\n" 
+      + rows.map(e => e.join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "shift_schedule_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const pendingCount = requests.filter(r => r.status === 'PENDING').length;
@@ -196,9 +254,29 @@ const App: React.FC = () => {
           <div className="flex items-center gap-4">
             <div className="hidden md:flex flex-col items-end mr-4">
               <span className="text-xs text-slate-500">Weekly Budget</span>
-              <div className="flex items-center gap-1 font-semibold text-slate-700">
+              <div className="flex items-center gap-1 font-semibold text-slate-700 group cursor-pointer" onClick={() => setIsEditingBudget(true)}>
                 <div className={`w-2 h-2 rounded-full ${stats.totalCost > stats.budget ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
-                ${stats.totalCost.toLocaleString()} / ${stats.budget.toLocaleString()}
+                
+                {isEditingBudget ? (
+                  <div className="flex items-center">
+                    <span className="text-slate-400 text-xs mr-1">$</span>
+                    <input 
+                      type="number" 
+                      autoFocus
+                      className="w-20 border-b border-indigo-500 focus:outline-none text-right"
+                      value={budget}
+                      onChange={(e) => setBudget(Number(e.target.value))}
+                      onBlur={() => setIsEditingBudget(false)}
+                      onKeyDown={(e) => e.key === 'Enter' && setIsEditingBudget(false)}
+                    />
+                    <button onClick={(e) => { e.stopPropagation(); setIsEditingBudget(false); }} className="ml-1 text-emerald-600"><Check size={14}/></button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 hover:text-indigo-600">
+                    <span>${stats.totalCost.toLocaleString()} / ${stats.budget.toLocaleString()}</span>
+                    <Edit2 size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" />
+                  </div>
+                )}
               </div>
             </div>
             <button className="relative p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors">
@@ -314,27 +392,15 @@ const App: React.FC = () => {
             {/* SCHEDULE VIEW */}
             {currentView === AppView.SCHEDULE && (
               <div className="space-y-4">
-                <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                  <div className="text-sm text-slate-500">
-                    Showing schedule for <span className="font-semibold text-slate-900">Current Week</span>
-                  </div>
-                  <div className="flex gap-2">
-                     <button 
-                      onClick={() => setShifts(INITIAL_SHIFTS)} 
-                      className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md border border-slate-200"
-                    >
-                      Reset
-                    </button>
-                    <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm shadow-indigo-200 transition-all">
-                      Publish Schedule
-                    </button>
-                  </div>
-                </div>
                 <ScheduleGrid 
                   shifts={shifts} 
                   employees={employees} 
                   onAddShift={handleAddShift} 
                   onRemoveShift={handleRemoveShift}
+                  onSaveTemplate={handleSaveTemplate}
+                  onLoadTemplate={handleLoadTemplate}
+                  onClearSchedule={handleClearSchedule}
+                  onExportSchedule={handleExportSchedule}
                 />
               </div>
             )}
@@ -362,7 +428,7 @@ const App: React.FC = () => {
                     It helps avoid "accidental overtime" which costs SMBs thousands per year.
                   </p>
                 </div>
-                <CompliancePanel employees={employees} shifts={shifts} budget={WEEKLY_BUDGET} />
+                <CompliancePanel employees={employees} shifts={shifts} budget={budget} />
               </div>
             )}
 
