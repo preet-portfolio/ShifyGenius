@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Employee, AvailabilityRequest } from '../types';
+import { Employee, AvailabilityRequest, OvertimeRule } from '../types';
 import { DAYS_OF_WEEK } from '../constants';
-import { Mail, Check, X, Edit2, User, Clock, Trash2, AlertTriangle } from 'lucide-react';
+import { Mail, Check, X, Edit2, User, Clock, Trash2, AlertTriangle, Info } from 'lucide-react';
 
 interface TeamViewProps {
   employees: Employee[];
@@ -34,7 +34,8 @@ export const TeamView: React.FC<TeamViewProps> = ({
     hourlyRate: 15,
     maxHoursPerWeek: 40,
     unavailableDays: [],
-    preferredShifts: []
+    preferredShifts: [],
+    overtimeRule: 'STANDARD'
   });
 
   const pendingRequests = requests.filter(r => r.status === 'PENDING');
@@ -85,6 +86,7 @@ export const TeamView: React.FC<TeamViewProps> = ({
       maxHoursPerWeek: newEmployeeData.maxHoursPerWeek || 40,
       unavailableDays: newEmployeeData.unavailableDays || [],
       preferredShifts: [],
+      overtimeRule: newEmployeeData.overtimeRule || 'STANDARD',
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(newEmployeeData.name)}&background=random`
     };
 
@@ -97,7 +99,8 @@ export const TeamView: React.FC<TeamViewProps> = ({
       hourlyRate: 15,
       maxHoursPerWeek: 40,
       unavailableDays: [],
-      preferredShifts: []
+      preferredShifts: [],
+      overtimeRule: 'STANDARD'
     });
   };
 
@@ -155,6 +158,11 @@ export const TeamView: React.FC<TeamViewProps> = ({
                         <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-600 font-medium">{emp.role}</span>
                         <span>•</span>
                         <span>${emp.hourlyRate}/hr</span>
+                        {emp.overtimeRule && emp.overtimeRule !== 'STANDARD' && (
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded font-bold text-[10px] border border-amber-200">
+                            {emp.overtimeRule === 'CALIFORNIA' ? 'CA Rules' : 'Sun 2x'}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -265,7 +273,7 @@ export const TeamView: React.FC<TeamViewProps> = ({
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
             <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-              <h3 className="font-semibold text-slate-800">Edit Availability: {editingEmployee.name}</h3>
+              <h3 className="font-semibold text-slate-800">Edit Employee: {editingEmployee.name}</h3>
               <button onClick={() => setEditingEmployee(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
             </div>
             
@@ -280,6 +288,23 @@ export const TeamView: React.FC<TeamViewProps> = ({
                     <p className="text-sm text-slate-500">Max Hours</p>
                     <p className="font-semibold text-slate-800">{editingEmployee.maxHoursPerWeek} hrs/wk</p>
                  </div>
+              </div>
+
+              {/* Overtime Rule Selector (Edit Mode) */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-2">
+                   Overtime Rule <Info size={14} className="text-slate-400" />
+                </label>
+                <select 
+                    value={editingEmployee.overtimeRule || 'STANDARD'}
+                    onChange={(e) => setEditingEmployee({...editingEmployee, overtimeRule: e.target.value as OvertimeRule})}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                >
+                    <option value="STANDARD">Standard (1.5x after 40hrs/wk)</option>
+                    <option value="CALIFORNIA">California (Daily 8h + Weekly 40h)</option>
+                    <option value="SUNDAY_DOUBLE">Sunday Double Pay (2x Sun)</option>
+                </select>
+                <p className="text-xs text-slate-400 mt-1">Determines how overtime pay is calculated for this employee.</p>
               </div>
 
               <h4 className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
@@ -396,14 +421,28 @@ export const TeamView: React.FC<TeamViewProps> = ({
                 </div>
               </div>
 
-              <div>
-                 <label className="block text-sm font-medium text-slate-700 mb-1">Max Hours / Week</label>
-                 <input 
-                    type="number" 
-                    value={newEmployeeData.maxHoursPerWeek}
-                    onChange={(e) => setNewEmployeeData({...newEmployeeData, maxHoursPerWeek: parseFloat(e.target.value)})}
-                    className="w-full px-3 py-2 bg-slate-700 text-white border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Max Hours / Week</label>
+                    <input 
+                        type="number" 
+                        value={newEmployeeData.maxHoursPerWeek}
+                        onChange={(e) => setNewEmployeeData({...newEmployeeData, maxHoursPerWeek: parseFloat(e.target.value)})}
+                        className="w-full px-3 py-2 bg-slate-700 text-white border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Overtime Rule</label>
+                    <select 
+                        value={newEmployeeData.overtimeRule || 'STANDARD'}
+                        onChange={(e) => setNewEmployeeData({...newEmployeeData, overtimeRule: e.target.value as OvertimeRule})}
+                        className="w-full px-3 py-2 bg-slate-700 text-white border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="STANDARD">Standard</option>
+                        <option value="CALIFORNIA">California</option>
+                        <option value="SUNDAY_DOUBLE">Sun 2x</option>
+                    </select>
+                </div>
               </div>
 
               <div>

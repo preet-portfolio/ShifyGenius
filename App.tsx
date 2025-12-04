@@ -10,46 +10,115 @@ import {
   Clock, 
   AlertCircle,
   Edit2,
-  Check
+  Check,
+  Megaphone,
+  ArrowRight,
+  Smartphone
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-import { Employee, Shift, AppView, WeeklyStats, AvailabilityRequest } from './types';
-import { INITIAL_EMPLOYEES, INITIAL_SHIFTS, INITIAL_WEEKLY_BUDGET, INITIAL_REQUESTS } from './constants';
+import { Employee, Shift, AppView, WeeklyStats, AvailabilityRequest, Notification } from './types';
+import { INITIAL_EMPLOYEES, INITIAL_SHIFTS, INITIAL_WEEKLY_BUDGET, INITIAL_REQUESTS, INITIAL_NOTIFICATIONS, formatTime } from './constants';
 import { StatsCard } from './components/StatsCard';
 import { ScheduleGrid } from './components/ScheduleGrid';
 import { CompliancePanel } from './components/CompliancePanel';
 import { TeamView } from './components/TeamView';
+import { EmployeePortal } from './components/EmployeePortal';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.DASHBOARD);
   const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
   const [shifts, setShifts] = useState<Shift[]>(INITIAL_SHIFTS);
   const [requests, setRequests] = useState<AvailabilityRequest[]>(INITIAL_REQUESTS);
+  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
   const [budget, setBudget] = useState<number>(INITIAL_WEEKLY_BUDGET);
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // State to trigger Broadcast Modal from Dashboard
+  const [openBroadcastFromDash, setOpenBroadcastFromDash] = useState(false);
 
   // Derived State: Calculate Stats
   const stats = useMemo<WeeklyStats>(() => {
     let totalCost = 0;
     let totalHours = 0;
-    const employeeHours: Record<string, number> = {};
+    let overtimeHours = 0;
 
-    shifts.forEach(shift => {
-      const emp = employees.find(e => e.id === shift.employeeId);
-      if (emp) {
-        const duration = parseInt(shift.endTime) - parseInt(shift.startTime);
-        const cost = duration * emp.hourlyRate;
-        totalCost += cost;
-        totalHours += duration;
-        employeeHours[emp.id] = (employeeHours[emp.id] || 0) + duration;
-      }
+    // Helper: Correctly calculate duration even if shift ends at "00" (midnight)
+    const getShiftDuration = (s: Shift) => {
+      const start = parseInt(s.startTime);
+      const end = parseInt(s.endTime) === 0 ? 24 : parseInt(s.endTime);
+      return Math.max(0, end - start);
+    };
+
+    // Pre-calculate shifts per employee per day
+    const empShifts: Record<string, Record<number, number>> = {};
+    employees.forEach(e => {
+        empShifts[e.id] = {};
+        shifts.filter(s => s.employeeId === e.id).forEach(s => {
+            const dur = getShiftDuration(s);
+            empShifts[e.id][s.dayIndex] = (empShifts[e.id][s.dayIndex] || 0) + dur;
+        });
     });
 
-    let overtimeHours = 0;
-    Object.values(employeeHours).forEach(hours => {
-      if (hours > 40) overtimeHours += (hours - 40);
+    employees.forEach(emp => {
+        const rule = emp.overtimeRule || 'STANDARD';
+        let weeklyRegularHours = 0;
+        let empTotalCost = 0;
+        const dailyHoursMap = empShifts[emp.id] || {};
+
+        // Iterate through all days to apply Daily Rules
+        for (let day = 0; day <= 6; day++) {
+            const hours = dailyHoursMap[day] || 0;
+            totalHours += hours;
+
+            if (rule === 'SUNDAY_DOUBLE' && day === 6) {
+                // Double time for Sunday, separate from weekly OT bucket
+                empTotalCost += hours * emp.hourlyRate * 2;
+                continue; 
+            }
+
+            if (rule === 'CALIFORNIA') {
+                if (hours > 8) {
+                    const dailyOT = hours - 8;
+                    const straight = 8;
+                    // Daily Overtime Calculation
+                    empTotalCost += (straight * emp.hourlyRate) + (dailyOT * emp.hourlyRate * 1.5);
+                    overtimeHours += dailyOT;
+                    weeklyRegularHours += straight;
+                } else {
+                    empTotalCost += hours * emp.hourlyRate;
+                    weeklyRegularHours += hours;
+                }
+            } else {
+                // STANDARD or SUNDAY_DOUBLE (non-Sunday days)
+                weeklyRegularHours += hours;
+            }
+        }
+
+        // Apply Weekly Overtime Logic to the accumulated regular hours
+        if (weeklyRegularHours > 40) {
+            const weeklyOT = weeklyRegularHours - 40;
+            
+            if (rule === 'CALIFORNIA') {
+                // For CA, these hours were already paid at 1.0x (Straight Time), so add 0.5x premium
+                empTotalCost += weeklyOT * emp.hourlyRate * 0.5;
+            } else {
+                // For Standard, split the bucket into Regular (40) and OT (Excess)
+                // Note: We haven't added cost for Standard hours yet in the loop, so we do it here
+                const regular = 40;
+                empTotalCost += (regular * emp.hourlyRate) + (weeklyOT * emp.hourlyRate * 1.5);
+            }
+            overtimeHours += weeklyOT;
+        } else {
+            // If under 40 hours
+            if (rule !== 'CALIFORNIA') { 
+                // CA cost is already accumulated in the loop, only Standard needs adding here
+                empTotalCost += weeklyRegularHours * emp.hourlyRate;
+            }
+        }
+        
+        totalCost += empTotalCost;
     });
 
     return {
@@ -68,7 +137,10 @@ const App: React.FC = () => {
         .filter(s => s.dayIndex === index)
         .reduce((acc, s) => {
           const emp = employees.find(e => e.id === s.employeeId);
-          return acc + (emp ? (parseInt(s.endTime) - parseInt(s.startTime)) * emp.hourlyRate : 0);
+          // Fix midnight bug here too for chart accuracy
+          const end = parseInt(s.endTime) === 0 ? 24 : parseInt(s.endTime);
+          const duration = end - parseInt(s.startTime);
+          return acc + (emp ? duration * emp.hourlyRate : 0);
         }, 0);
       return { name: day, cost };
     });
@@ -80,6 +152,22 @@ const App: React.FC = () => {
 
   const handleRemoveShift = (id: string) => {
     setShifts(shifts.filter(s => s.id !== id));
+  };
+  
+  const handleMoveShift = (shiftId: string, newDayIndex: number) => {
+    setShifts(shifts.map(s => s.id === shiftId ? { ...s, dayIndex: newDayIndex } : s));
+  };
+
+  const handleCopyDay = (sourceDay: number, targetDay: number) => {
+    const sourceShifts = shifts.filter(s => s.dayIndex === sourceDay);
+    const newShifts = sourceShifts.map(s => ({
+        ...s,
+        id: Math.random().toString(36).substr(2, 9),
+        dayIndex: targetDay
+    }));
+    // Remove existing shifts on target day to prevent duplicates/mess (optional, but cleaner)
+    const cleanedShifts = shifts.filter(s => s.dayIndex !== targetDay);
+    setShifts([...cleanedShifts, ...newShifts]);
   };
 
   const handleUpdateEmployee = (updatedEmployee: Employee) => {
@@ -94,6 +182,10 @@ const App: React.FC = () => {
     setEmployees(employees.filter(e => e.id !== employeeId));
     setShifts(shifts.filter(s => s.employeeId !== employeeId));
     setRequests(requests.filter(r => r.employeeId !== employeeId));
+  };
+
+  const handleAddRequest = (req: AvailabilityRequest) => {
+    setRequests([...requests, req]);
   };
 
   const handleApproveRequest = (request: AvailabilityRequest) => {
@@ -114,49 +206,35 @@ const App: React.FC = () => {
     setRequests(requests.map(r => r.id === requestId ? { ...r, status: 'REJECTED' } : r));
   };
 
-  // Schedule Actions
   const handleSaveTemplate = () => {
-    try {
-      localStorage.setItem('shift_template', JSON.stringify(shifts));
-      alert('Schedule template saved successfully!');
-    } catch (e) {
-      console.error('Failed to save template', e);
-    }
+    localStorage.setItem('shift_template', JSON.stringify(shifts));
+    alert('Schedule template saved successfully!');
   };
 
   const handleLoadTemplate = () => {
-    try {
-      const saved = localStorage.getItem('shift_template');
-      if (saved) {
-        if (window.confirm('This will overwrite the current schedule. Continue?')) {
-          setShifts(JSON.parse(saved));
-        }
-      } else {
-        alert('No saved template found.');
-      }
-    } catch (e) {
-      console.error('Failed to load template', e);
+    const saved = localStorage.getItem('shift_template');
+    if (saved && window.confirm('Overwrite current schedule?')) {
+      setShifts(JSON.parse(saved));
     }
   };
 
   const handleClearSchedule = () => {
-    if (window.confirm('Are you sure you want to clear all shifts?')) {
-      setShifts([]);
-    }
+    if (window.confirm('Clear all shifts?')) setShifts([]);
   };
 
   const handleExportSchedule = () => {
     const headers = ['Day', 'Employee', 'Role', 'Start Time', 'End Time', 'Hours', 'Cost'];
     const rows = shifts.map(s => {
       const emp = employees.find(e => e.id === s.employeeId);
-      const duration = parseInt(s.endTime) - parseInt(s.startTime);
+      const end = parseInt(s.endTime) === 0 ? 24 : parseInt(s.endTime);
+      const duration = end - parseInt(s.startTime);
       const cost = duration * (emp?.hourlyRate || 0);
       return [
         ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][s.dayIndex],
         emp?.name || 'Unknown',
         s.role,
-        `${s.startTime}:00`,
-        `${s.endTime}:00`,
+        formatTime(s.startTime),
+        formatTime(s.endTime),
         duration,
         cost
       ];
@@ -166,16 +244,35 @@ const App: React.FC = () => {
       + headers.join(",") + "\n" 
       + rows.map(e => e.join(",")).join("\n");
 
-    const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "shift_schedule_export.csv");
+    link.setAttribute("href", encodeURI(csvContent));
+    link.setAttribute("download", "shift_schedule.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
+  const handleJumpToBroadcast = () => {
+    setCurrentView(AppView.SCHEDULE);
+    setTimeout(() => {
+        setOpenBroadcastFromDash(true);
+    }, 100);
+  };
+
   const pendingCount = requests.filter(r => r.status === 'PENDING').length;
+
+  // Render Employee Portal View
+  if (currentView === AppView.EMPLOYEE_PORTAL) {
+    return (
+      <EmployeePortal 
+        employees={employees} 
+        shifts={shifts} 
+        notifications={notifications}
+        onRequestAdd={handleAddRequest}
+        onBackToAdmin={() => setCurrentView(AppView.DASHBOARD)} 
+      />
+    );
+  }
 
   const NavItem = ({ view, icon: Icon, label, badge }: { view: AppView, icon: any, label: string, badge?: number }) => (
     <button
@@ -220,13 +317,12 @@ const App: React.FC = () => {
         </nav>
 
         <div className="p-6 border-t border-slate-100">
-          <div className="bg-slate-900 rounded-xl p-4 text-white">
-            <h4 className="text-sm font-semibold mb-1">Pro Plan</h4>
-            <p className="text-xs text-slate-400 mb-3">5/15 Employees used</p>
-            <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-indigo-500 h-full w-1/3"></div>
-            </div>
-          </div>
+          <button 
+            onClick={() => setCurrentView(AppView.EMPLOYEE_PORTAL)}
+            className="w-full py-2.5 bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+          >
+             <Smartphone size={16} /> Employee Portal
+          </button>
         </div>
       </aside>
 
@@ -273,21 +369,12 @@ const App: React.FC = () => {
                   </div>
                 ) : (
                   <div className="flex items-center gap-1 hover:text-indigo-600">
-                    <span>${stats.totalCost.toLocaleString()} / ${stats.budget.toLocaleString()}</span>
+                    <span>${stats.totalCost.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})} / ${stats.budget.toLocaleString()}</span>
                     <Edit2 size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" />
                   </div>
                 )}
               </div>
             </div>
-            <button className="relative p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors">
-              <Bell size={20} />
-              {pendingCount > 0 && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>}
-            </button>
-            <img 
-              src="https://picsum.photos/40/40?random=99" 
-              alt="User" 
-              className="w-9 h-9 rounded-full border border-slate-200" 
-            />
           </div>
         </header>
 
@@ -299,6 +386,12 @@ const App: React.FC = () => {
               <NavItem view={AppView.SCHEDULE} icon={CalendarDays} label="Schedule" />
               <NavItem view={AppView.TEAM} icon={Users} label="Team" badge={pendingCount > 0 ? pendingCount : undefined} />
               <NavItem view={AppView.AI_INSIGHTS} icon={Bot} label="AI Insights" />
+              <button 
+                onClick={() => {setCurrentView(AppView.EMPLOYEE_PORTAL); setIsMobileMenuOpen(false);}}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl w-full text-left font-medium text-slate-500 hover:bg-slate-100"
+              >
+                <Smartphone size={20} /> Employee Portal
+              </button>
             </nav>
           </div>
         )}
@@ -310,10 +403,28 @@ const App: React.FC = () => {
             {/* DASHBOARD VIEW */}
             {currentView === AppView.DASHBOARD && (
               <>
+                <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-red-100 p-2.5 rounded-full text-red-600 animate-pulse">
+                            <Megaphone size={24} />
+                        </div>
+                        <div>
+                            <h3 className="text-red-900 font-bold text-base">Quick Action: Find Coverage</h3>
+                            <p className="text-red-700 text-sm">Employee called out? Broadcast an open shift instantly.</p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={handleJumpToBroadcast}
+                        className="w-full md:w-auto px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg shadow-sm shadow-red-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                        Find Coverage Now <ArrowRight size={16} />
+                    </button>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <StatsCard 
                     title="Total Labor Cost" 
-                    value={`$${stats.totalCost.toLocaleString()}`} 
+                    value={`$${stats.totalCost.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`} 
                     subtitle="Last 7 Days"
                     icon={<DollarSign size={20} />}
                     trend={stats.totalCost > stats.budget ? 'up' : 'down'}
@@ -329,7 +440,7 @@ const App: React.FC = () => {
                   <StatsCard 
                     title="Overtime Risk" 
                     value={`${stats.overtimeHours} hrs`} 
-                    subtitle="Hours exceeding 40/emp"
+                    subtitle="Hours exceeding rules"
                     icon={<AlertCircle size={20} />}
                     alert={stats.overtimeHours > 0}
                   />
@@ -342,7 +453,6 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Chart */}
                   <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h3 className="text-lg font-semibold text-slate-800 mb-6">Labor Cost Trend</h3>
                     <div className="h-64 w-full">
@@ -350,10 +460,7 @@ const App: React.FC = () => {
                         <BarChart data={chartData}>
                           <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}} />
                           <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}} tickFormatter={(val) => `$${val}`} />
-                          <Tooltip 
-                            cursor={{fill: '#f1f5f9'}}
-                            contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} 
-                          />
+                          <Tooltip cursor={{fill: '#f1f5f9'}} />
                           <Bar dataKey="cost" radius={[4, 4, 0, 0]}>
                             {chartData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.cost > 600 ? '#818cf8' : '#c7d2fe'} />
@@ -364,7 +471,6 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* AI Quick Insight Mini Panel */}
                   <div className="bg-indigo-900 rounded-xl p-6 text-white flex flex-col justify-between">
                     <div>
                       <div className="flex items-center gap-2 mb-4">
@@ -389,7 +495,6 @@ const App: React.FC = () => {
               </>
             )}
 
-            {/* SCHEDULE VIEW */}
             {currentView === AppView.SCHEDULE && (
               <div className="space-y-4">
                 <ScheduleGrid 
@@ -397,15 +502,18 @@ const App: React.FC = () => {
                   employees={employees} 
                   onAddShift={handleAddShift} 
                   onRemoveShift={handleRemoveShift}
+                  onMoveShift={handleMoveShift}
+                  onCopyDay={handleCopyDay}
                   onSaveTemplate={handleSaveTemplate}
                   onLoadTemplate={handleLoadTemplate}
                   onClearSchedule={handleClearSchedule}
                   onExportSchedule={handleExportSchedule}
+                  triggerBroadcast={openBroadcastFromDash}
+                  resetBroadcastTrigger={() => setOpenBroadcastFromDash(false)}
                 />
               </div>
             )}
 
-            {/* TEAM VIEW */}
             {currentView === AppView.TEAM && (
                <TeamView 
                  employees={employees} 
@@ -418,16 +526,8 @@ const App: React.FC = () => {
                />
             )}
 
-            {/* AI INSIGHTS VIEW */}
             {currentView === AppView.AI_INSIGHTS && (
               <div className="space-y-6">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                  <h3 className="text-lg font-semibold text-slate-800 mb-2">Why this matters</h3>
-                  <p className="text-slate-600 leading-relaxed">
-                    ShiftGenius uses Gemini AI to analyze your schedule against local labor laws and your budget. 
-                    It helps avoid "accidental overtime" which costs SMBs thousands per year.
-                  </p>
-                </div>
                 <CompliancePanel employees={employees} shifts={shifts} budget={budget} />
               </div>
             )}
