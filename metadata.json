@@ -1,0 +1,5 @@
+{
+  "name": "ShiftGenius",
+  "description": "A smart employee scheduling application for SMBs focused on real-time labor cost control and compliance, powered by Gemini AI.",
+  "requestFramePermissions": []
+}
