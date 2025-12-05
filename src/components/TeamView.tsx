@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Employee, AvailabilityRequest, OvertimeRule } from '../types';
-import { DAYS_OF_WEEK } from '../constants';
+import { Employee, AvailabilityRequest, OvertimeRule } from '@/src/types';
+import { DAYS_OF_WEEK } from '@/src/constants';
 import { Mail, Check, X, Edit2, User, Clock, Trash2, AlertTriangle, Info } from 'lucide-react';
 
 interface TeamViewProps {

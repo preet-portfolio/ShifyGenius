@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Employee, Shift } from '../types';
-import { DAYS_OF_WEEK, formatTime } from '../constants';
+import { Employee, Shift } from '@/src/types';
+import { DAYS_OF_WEEK, formatTime } from '@/src/constants';
 import { Plus, X, Clock, Sparkles, AlertTriangle, Save, Download, Trash2, FileDown, Megaphone, Search, CheckCircle2, BellRing, Copy, MessageSquare, Send, GripVertical, UserPlus } from 'lucide-react';
-import { generateSmartScheduleSuggestion } from '../services/geminiService';
+import { generateSmartScheduleSuggestion } from '@/src/services/geminiService';
 
 interface ScheduleGridProps {
   shifts: Shift[];

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Employee, Shift, Notification, AvailabilityRequest } from '../types';
-import { DAYS_OF_WEEK, formatTime } from '../constants';
+import { Employee, Shift, Notification, AvailabilityRequest } from '@/src/types';
+import { DAYS_OF_WEEK, formatTime } from '@/src/constants';
 import { Calendar, Clock, MapPin, User, LogOut, Phone, Bell, Send, Repeat, PlusCircle, CheckCircle2, Megaphone } from 'lucide-react';
 
 interface EmployeePortalProps {

@@ -1,7 +1,7 @@
 {
   "name": "shiftgenius",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -21,10 +21,12 @@
     "@google/genai": "^1.31.0",
     "@sentry/react": "^10.29.0",
     "@sentry/vite-plugin": "^4.6.1",
+    "firebase": "^12.6.0",
     "lucide-react": "^0.555.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-markdown": "^10.1.0",
+    "react-router-dom": "^6.30.2",
     "recharts": "^3.5.1",
     "zod": "^4.1.13",
     "zustand": "^5.0.9"

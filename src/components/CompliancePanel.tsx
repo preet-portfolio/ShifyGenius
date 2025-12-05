@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { analyzeScheduleCompliance } from '../services/geminiService';
-import { Employee, Shift, ComplianceAnalysis, ViolationSeverity } from '../types';
+import { analyzeScheduleCompliance } from '@/src/services/geminiService';
+import { Employee, Shift, ComplianceAnalysis, ViolationSeverity } from '@/src/types';
 import { ShieldCheck, AlertTriangle, RefreshCw, AlertCircle, DollarSign, TrendingUp, Info } from 'lucide-react';
 
 interface CompliancePanelProps {
