@@ -14,15 +14,49 @@ export default defineConfig({
     }
   },
   build: {
-    // Increase chunk size warning limit to 600kb (from default 500kb)
-    // Our main bundle is ~555kb, which is acceptable for a feature-rich app
-    chunkSizeWarningLimit: 600,
+    // Increase chunk size warning limit to 1000kb for feature-rich SaaS app
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        // Manual chunking for better code splitting
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'recharts-vendor': ['recharts'],
+        // Aggressive code splitting for optimal loading
+        manualChunks: (id) => {
+          // Vendor chunks for large libraries
+          if (id.includes('node_modules')) {
+            // React core
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'react-vendor';
+            }
+            // Routing
+            if (id.includes('react-router')) {
+              return 'router-vendor';
+            }
+            // Charts
+            if (id.includes('recharts') || id.includes('d3-')) {
+              return 'recharts-vendor';
+            }
+            // Firebase
+            if (id.includes('firebase') || id.includes('@firebase')) {
+              return 'firebase-vendor';
+            }
+            // Icons
+            if (id.includes('lucide-react')) {
+              return 'icons-vendor';
+            }
+            // Markdown rendering
+            if (id.includes('react-markdown') || id.includes('remark') || id.includes('rehype')) {
+              return 'markdown-vendor';
+            }
+            // State management
+            if (id.includes('zustand')) {
+              return 'state-vendor';
+            }
+            // Validation
+            if (id.includes('zod')) {
+              return 'validation-vendor';
+            }
+            // All other node_modules
+            return 'vendor';
+          }
         }
       }
     }
