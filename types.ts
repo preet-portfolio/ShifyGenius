@@ -12,13 +12,44 @@ export interface Employee {
   overtimeRule?: OvertimeRule;
 }
 
+// Structured AI Compliance Response Types
+export type ViolationType = 'OVERTIME_RISK' | 'UNDERSTAFFED' | 'BREAK_RULE' | 'BUDGET_OVERRUN' | 'BURNOUT_RISK';
+export type ViolationSeverity = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface ComplianceViolation {
+  type: ViolationType;
+  severity: ViolationSeverity;
+  affectedEmployee?: string;
+  description: string;
+  suggestedAction: string;
+}
+
+export interface CostAnalysis {
+  estimatedTotalCost: number;
+  budgetVariance: number; // Positive = over budget, Negative = under budget
+  overtimeCost: number;
+  regularCost: number;
+}
+
+export interface ComplianceAnalysis {
+  violations: ComplianceViolation[];
+  costAnalysis: CostAnalysis;
+  recommendations: string[];
+  overallRisk: 'HIGH' | 'MEDIUM' | 'LOW';
+  disclaimer: string;
+}
+
 export interface Shift {
   id: string;
   employeeId: string;
-  dayIndex: number; // 0 = Monday, 6 = Sunday
-  startTime: string; // "09:00"
-  endTime: string; // "17:00"
+  dayIndex: number; // 0 = Monday, 6 = Sunday (kept for backward compatibility)
+  startTime: string; // "09:00" (kept for backward compatibility)
+  endTime: string; // "17:00" (kept for backward compatibility)
   role: string;
+  // New fields for production (optional for now to maintain compatibility)
+  startDateTime?: string; // ISO8601: "2025-01-06T09:00:00Z"
+  endDateTime?: string; // ISO8601: "2025-01-06T17:00:00Z"
+  recurrence?: string; // RRULE format (RFC 5545) for repeating shifts
 }
 
 export interface WeeklyStats {

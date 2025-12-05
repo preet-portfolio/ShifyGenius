@@ -1,13 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  LayoutDashboard, 
-  CalendarDays, 
-  Users, 
-  Bot, 
-  Menu, 
-  Bell, 
-  DollarSign, 
-  Clock, 
+import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+import {
+  LayoutDashboard,
+  CalendarDays,
+  Users,
+  Bot,
+  Menu,
+  Bell,
+  DollarSign,
+  Clock,
   AlertCircle,
   Edit2,
   Check,
@@ -20,10 +20,12 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { Employee, Shift, AppView, WeeklyStats, AvailabilityRequest, Notification } from './types';
 import { INITIAL_EMPLOYEES, INITIAL_SHIFTS, INITIAL_WEEKLY_BUDGET, INITIAL_REQUESTS, INITIAL_NOTIFICATIONS, formatTime } from './constants';
 import { StatsCard } from './components/StatsCard';
-import { ScheduleGrid } from './components/ScheduleGrid';
-import { CompliancePanel } from './components/CompliancePanel';
-import { TeamView } from './components/TeamView';
-import { EmployeePortal } from './components/EmployeePortal';
+
+// Lazy load heavy components for better performance
+const ScheduleGrid = lazy(() => import('./components/ScheduleGrid').then(m => ({ default: m.ScheduleGrid })));
+const CompliancePanel = lazy(() => import('./components/CompliancePanel').then(m => ({ default: m.CompliancePanel })));
+const TeamView = lazy(() => import('./components/TeamView').then(m => ({ default: m.TeamView })));
+const EmployeePortal = lazy(() => import('./components/EmployeePortal').then(m => ({ default: m.EmployeePortal })));
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.DASHBOARD);
@@ -264,13 +266,15 @@ const App: React.FC = () => {
   // Render Employee Portal View
   if (currentView === AppView.EMPLOYEE_PORTAL) {
     return (
-      <EmployeePortal 
-        employees={employees} 
-        shifts={shifts} 
-        notifications={notifications}
-        onRequestAdd={handleAddRequest}
-        onBackToAdmin={() => setCurrentView(AppView.DASHBOARD)} 
-      />
+      <Suspense fallback={<div className="flex items-center justify-center h-screen"><div className="animate-spin h-12 w-12 border-4 border-indigo-600 border-t-transparent rounded-full"></div></div>}>
+        <EmployeePortal
+          employees={employees}
+          shifts={shifts}
+          notifications={notifications}
+          onRequestAdd={handleAddRequest}
+          onBackToAdmin={() => setCurrentView(AppView.DASHBOARD)}
+        />
+      </Suspense>
     );
   }
 
@@ -497,38 +501,42 @@ const App: React.FC = () => {
 
             {currentView === AppView.SCHEDULE && (
               <div className="space-y-4">
-                <ScheduleGrid 
-                  shifts={shifts} 
-                  employees={employees} 
-                  onAddShift={handleAddShift} 
-                  onRemoveShift={handleRemoveShift}
-                  onMoveShift={handleMoveShift}
-                  onCopyDay={handleCopyDay}
-                  onSaveTemplate={handleSaveTemplate}
-                  onLoadTemplate={handleLoadTemplate}
-                  onClearSchedule={handleClearSchedule}
-                  onExportSchedule={handleExportSchedule}
-                  triggerBroadcast={openBroadcastFromDash}
-                  resetBroadcastTrigger={() => setOpenBroadcastFromDash(false)}
-                />
+                <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div></div>}>
+                  <ScheduleGrid
+                    shifts={shifts}
+                    employees={employees}
+                    onAddShift={handleAddShift}
+                    onRemoveShift={handleRemoveShift}
+                    onSaveTemplate={handleSaveTemplate}
+                    onLoadTemplate={handleLoadTemplate}
+                    onClearSchedule={handleClearSchedule}
+                    onExportSchedule={handleExportSchedule}
+                    triggerBroadcast={openBroadcastFromDash}
+                    resetBroadcastTrigger={() => setOpenBroadcastFromDash(false)}
+                  />
+                </Suspense>
               </div>
             )}
 
             {currentView === AppView.TEAM && (
-               <TeamView 
-                 employees={employees} 
-                 requests={requests}
-                 onUpdateEmployee={handleUpdateEmployee}
-                 onAddEmployee={handleAddEmployee}
-                 onRemoveEmployee={handleRemoveEmployee}
-                 onApproveRequest={handleApproveRequest}
-                 onRejectRequest={handleRejectRequest}
-               />
+              <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div></div>}>
+                <TeamView
+                  employees={employees}
+                  requests={requests}
+                  onUpdateEmployee={handleUpdateEmployee}
+                  onAddEmployee={handleAddEmployee}
+                  onRemoveEmployee={handleRemoveEmployee}
+                  onApproveRequest={handleApproveRequest}
+                  onRejectRequest={handleRejectRequest}
+                />
+              </Suspense>
             )}
 
             {currentView === AppView.AI_INSIGHTS && (
               <div className="space-y-6">
-                <CompliancePanel employees={employees} shifts={shifts} budget={budget} />
+                <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div></div>}>
+                  <CompliancePanel employees={employees} shifts={shifts} budget={budget} />
+                </Suspense>
               </div>
             )}
 

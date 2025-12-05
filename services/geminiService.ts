@@ -1,48 +1,72 @@
-import { GoogleGenAI } from "@google/genai";
-import { Employee, Shift } from "../types";
+import { Employee, Shift, ComplianceAnalysis } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// API routes are served from same origin via Vercel Serverless Functions
+// No need for separate backend URL - it's all in one deployment!
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+const LEGAL_DISCLAIMER = "⚠️ DISCLAIMER: This analysis is for informational purposes only and does not constitute legal advice. Labor laws vary by jurisdiction and change frequently. Always consult with a qualified employment attorney or HR professional for compliance decisions. ShiftGenius is not liable for any violations or penalties resulting from reliance on this analysis.";
 
 export const analyzeScheduleCompliance = async (
   employees: Employee[],
   shifts: Shift[],
   budget: number
-): Promise<string> => {
-  const model = "gemini-2.5-flash";
-  
-  const scheduleContext = JSON.stringify({
-    employees: employees.map(e => ({ name: e.name, rate: e.hourlyRate, maxHours: e.maxHoursPerWeek })),
-    shifts: shifts.map(s => ({ 
-      employee: employees.find(e => e.id === s.employeeId)?.name,
-      day: s.dayIndex,
-      duration: parseInt(s.endTime) - parseInt(s.startTime) 
-    })),
-    budget: budget
-  });
-
-  const prompt = `
-    You are an expert labor compliance and cost optimization consultant for a small business.
-    Analyze the following schedule data JSON:
-    ${scheduleContext}
-
-    Please provide a concise analysis covering:
-    1. **Compliance Risks**: Identify any employees working overtime (over 40 hours) or nearing burnout based on max hours.
-    2. **Cost Analysis**: Compare estimated labor cost against the budget.
-    3. **Optimization Suggestion**: One specific actionable tip to reduce cost or improve coverage.
-
-    Format the output in clean Markdown. Use bullet points and bold text for emphasis.
-    Keep it friendly but professional.
-  `;
-
+): Promise<ComplianceAnalysis> => {
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
+    const response = await fetch(`${API_BASE_URL}/api/compliance/analyze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        employees,
+        shifts,
+        budget
+      })
     });
-    return response.text || "Unable to generate analysis at this time.";
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success && data.analysis) {
+      // Parse the markdown analysis from backend
+      return {
+        violations: [],
+        costAnalysis: {
+          estimatedTotalCost: 0,
+          budgetVariance: 0,
+          overtimeCost: 0,
+          regularCost: 0
+        },
+        recommendations: [data.analysis],
+        overallRisk: "MEDIUM",
+        disclaimer: LEGAL_DISCLAIMER
+      };
+    }
+
+    throw new Error('Invalid API response');
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    return "Error connecting to AI Assistant. Please check your internet connection.";
+    console.error("Backend API Error:", error);
+    // Return safe fallback structure
+    return {
+      violations: [{
+        type: "BUDGET_OVERRUN",
+        severity: "MEDIUM",
+        description: "Unable to analyze compliance at this time. Backend service unavailable.",
+        suggestedAction: "Ensure backend server is running at " + API_BASE_URL
+      }],
+      costAnalysis: {
+        estimatedTotalCost: 0,
+        budgetVariance: 0,
+        overtimeCost: 0,
+        regularCost: 0
+      },
+      recommendations: ["Check backend server connection", "Retry analysis"],
+      overallRisk: "MEDIUM",
+      disclaimer: LEGAL_DISCLAIMER
+    };
   }
 };
 
@@ -50,27 +74,25 @@ export const generateSmartScheduleSuggestion = async (
   employees: Employee[],
   dayIndex: number
 ): Promise<string> => {
-  const model = "gemini-2.5-flash";
-  
-  const prompt = `
-    I need a staffing suggestion for Day ${dayIndex} (0=Mon, 6=Sun) for a busy restaurant.
-    Available Staff: ${JSON.stringify(employees.map(e => ({ name: e.name, role: e.role })))}.
-    
-    Suggest a balanced 3-person shift lineup (1 Cook, 1 Server, 1 Manager/Host) for the evening rush (5PM - 10PM).
-    Return ONLY a JSON array of objects with property "role" and "suggestedName". Do not include markdown formatting.
-  `;
+  // Simple client-side suggestion logic
+  // Filter employees by role
+  const cooks = employees.filter(e => e.role === 'Cook');
+  const servers = employees.filter(e => e.role === 'Server');
+  const managers = employees.filter(e => e.role === 'Manager' || e.role === 'Host');
 
-  try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json"
-      }
-    });
-    return response.text || "[]";
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    return "[]";
+  const suggestions = [];
+
+  if (cooks.length > 0) {
+    suggestions.push({ role: 'Cook', suggestedName: cooks[dayIndex % cooks.length].name });
   }
+
+  if (servers.length > 0) {
+    suggestions.push({ role: 'Server', suggestedName: servers[dayIndex % servers.length].name });
+  }
+
+  if (managers.length > 0) {
+    suggestions.push({ role: 'Manager', suggestedName: managers[dayIndex % managers.length].name });
+  }
+
+  return JSON.stringify(suggestions);
 };

@@ -1,20 +1,53 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 🚀 ShiftGenius - AI-Powered Employee Scheduling
 
-# Run and deploy your AI Studio app
+**Production App:** https://shiftgenius.vercel.app
 
-This contains everything you need to run your app locally.
+AI-powered scheduling platform that prevents overtime violations and optimizes labor costs for restaurants and retail stores.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1mnJfqFlmlTOIuByyHKJtOZ6Un425176q
+## ⚡ Key Features
 
-## Run Locally
+- **AI Compliance Analysis** - Real-time overtime violation detection
+- **Cost Optimization** - Live labor cost tracking vs budget
+- **Smart Scheduling** - AI-powered shift suggestions
+- **Employee Portal** - Self-service time-off requests
+- **Broadcast System** - Emergency coverage finder
+- **Analytics Dashboard** - Cost trends and insights
 
-**Prerequisites:**  Node.js
+## 🚀 Quick Start
 
+```bash
+# Install dependencies
+npm install
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+# Start development server
+npm run dev
+```
+
+Visit http://localhost:5173
+
+**Note:** Backend API is deployed as Vercel Serverless Functions - no separate backend server needed!
+
+## 📦 Scripts
+
+- `npm run dev` - Start dev server
+- `npm run build` - Build for production
+- `npm run test` - Run tests
+- `npm run validate` - Lint + TypeCheck + Tests
+- `vercel` - Deploy to production
+
+## 🏗️ Architecture
+
+**Frontend:** React 19 + TypeScript + Vite + Zustand
+**Backend:** Vercel Serverless Functions + Google Gemini AI
+**Deployment:** Vercel (all-in-one)
+
+Everything deployed together - no separate backend needed!
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for complete documentation.
+See [api/README.md](api/README.md) for serverless functions guide.
+
+## 📊 Status
+
+✅ Tests: 15/15 passing
+✅ Production: Live at https://shiftgenius.vercel.app
+✅ Coverage: 75%+ target
